@@ -1,74 +1,72 @@
 import Pyro4
 import threading
 
-class ClienteChat:
+@Pyro4.expose
+@Pyro4.behavior(instance_mode="single")
+class ClienteChat(object):
     def __init__(self, nome):
         self.nome = nome
-        self.ativo = True  # Variável para controlar o loop principal
+        self.ativo = True
+        self.clientes_conectados = []
 
     @Pyro4.expose
     def receber_mensagem(self, mensagem):
         """Recebe uma mensagem do servidor e a exibe."""
-        print(f"Mensagem recebida: {mensagem}")  # Exibe a mensagem recebida de outros usuários
+        print(f"\n{mensagem}")
+        print("Digite sua mensagem (ou 'sair' para encerrar): ", end='', flush=True)
+
+    @Pyro4.expose
+    def receber_lista_clientes(self, lista_clientes):
+        """Recebe a lista atualizada de clientes."""
+        self.clientes_conectados = lista_clientes
+        print("\nClientes conectados:", ", ".join(lista_clientes))
+        print("Digite sua mensagem (ou 'sair' para encerrar): ", end='', flush=True)
 
     def enviar_mensagens(self, servidor):
-        """Loop para enviar mensagens ao servidor."""
         while self.ativo:
             try:
                 mensagem = input("Digite sua mensagem (ou 'sair' para encerrar): ")
-                if mensagem.lower() == "sair":
+                if mensagem.lower() == 'sair':
                     self.ativo = False
                     print("Saindo do chat...")
                     break
-                # Exibe a própria mensagem antes de enviá-la
-                print(f"Você: {mensagem}")
-                servidor.enviar_mensagem(self.nome, mensagem)  # Envia para o servidor
+                servidor.enviar_mensagem(self.nome, mensagem)
             except Exception as e:
                 print(f"Erro ao enviar mensagem: {e}")
+                self.ativo = False
                 break
 
-    def mostrar_clientes_conectados(self, servidor):
-        """Solicita a lista de clientes conectados e a exibe."""
-        try:
-            clientes = servidor.obter_clientes_conectados()  # Solicita os clientes conectados ao servidor
-            print("\nClientes conectados:")
-            for cliente in clientes:
-                print(f"- {cliente}")
-        except Exception as e:
-            print(f"Erro ao obter clientes conectados: {e}")
-
     def iniciar(self):
-        """Conecta ao servidor e inicia o cliente."""
         try:
             # Conectando ao servidor
-            print("Localizando o servidor...")
-            ns = Pyro4.locateNS()  # Localiza o nameserver
-            uri_servidor = ns.lookup("servidor.chat")  # Obtém o URI do servidor
-            servidor = Pyro4.Proxy(uri_servidor)  # Cria um proxy para o servidor
+            ns = Pyro4.locateNS()
+            uri_servidor = ns.lookup("servidor.chat")
+            servidor = Pyro4.Proxy(uri_servidor)
 
-            # Configura o daemon para o cliente
-            print("Configurando o daemon do cliente...")
+            # Configurando o daemon do cliente
             daemon = Pyro4.Daemon()
-            uri_cliente = daemon.register(self)  # Registra o cliente no daemon
+            uri_cliente = daemon.register(self)
 
             # Thread para o daemon
-            daemon_thread = threading.Thread(target=daemon.requestLoop, daemon=True)
+            daemon_thread = threading.Thread(target=daemon.requestLoop)
+            daemon_thread.daemon = True
             daemon_thread.start()
-            print("Daemon do cliente iniciado e pronto para receber mensagens.")
 
-            # Agora que o cliente está pronto, registramos no servidor
-            print("Tentando registrar cliente no servidor...")
+            print("Conectando ao servidor...")
             servidor.registrar_cliente(self.nome, uri_cliente)
-            print("Cliente registrado no servidor com sucesso.")
+            print("Conectado com sucesso!")
 
-            # Exibir clientes conectados após o registro
-            self.mostrar_clientes_conectados(servidor)
-
-            # Loop para enviar mensagens
+            # Loop principal para enviar mensagens
             self.enviar_mensagens(servidor)
 
         except Exception as e:
-            print(f"Erro: {e}")
+            print(f"Erro ao iniciar cliente: {e}")
+        finally:
+            try:
+                servidor.desregistrar_cliente(self.nome)
+            except:
+                pass
+            daemon.shutdown()
 
 if __name__ == "__main__":
     nome_usuario = input("Digite seu nome de usuário: ")
