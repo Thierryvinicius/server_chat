@@ -39,6 +39,7 @@ class ClienteChat(object):
     def iniciar(self):
         try:
             # Conectando ao servidor
+            # ns = Pyro4.locateNS(host="IP", port=9999)
             ns = Pyro4.locateNS()
             uri_servidor = ns.lookup("servidor.chat")
             servidor = Pyro4.Proxy(uri_servidor)
