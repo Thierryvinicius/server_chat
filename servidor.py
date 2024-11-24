@@ -83,6 +83,7 @@ class ServidorChat(object):
             self.atualizar_lista_clientes()
 
 def main():
+    #Pyro4.Daemon(host="IP", port=9999)
     daemon = Pyro4.Daemon()
     ns = Pyro4.locateNS()
     
